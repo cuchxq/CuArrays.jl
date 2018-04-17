@@ -75,7 +75,7 @@ for (fname, elty) in
             @check ccall(($(string(fname)), libcusolver),
                           cusolverStatus_t,
                           (cusolverDnHandle_t, cublasFillMode_t, Cint, Array{Ptr{$elty}}, Cint, Ptr{Cint}, Cint),
-                          libcusolver_handle_dense[], uplo, n, Aptrs, lda, info, length(A))
+                          libcusolver_handle_dense[], uplo, n, Aptrs, lda, info, length(Aarray))
             Aarray, info
         end
     end
