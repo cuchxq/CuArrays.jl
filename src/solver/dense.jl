@@ -1,5 +1,5 @@
 
-#potrf 
+#potrf
 for (bname, fname,elty) in ((:cusolverDnSpotrf_bufferSize, :cusolverDnSpotrf, :Float32),
                             (:cusolverDnDpotrf_bufferSize, :cusolverDnDpotrf, :Float64),
                             (:cusolverDnCpotrf_bufferSize, :cusolverDnCpotrf, :Complex64),
@@ -37,7 +37,52 @@ for (bname, fname,elty) in ((:cusolverDnSpotrf_bufferSize, :cusolverDnSpotrf, :F
     end
 end
 
-#getrf 
+# helper function to get a device array of device pointers
+function device_batch(batch::Array{T}) where {T<:CuArray}
+  E = eltype(T)
+  ptrs = [Base.unsafe_convert(Ptr{E}, arr.buf) for arr in batch]
+  CuArray(ptrs)
+end
+
+#potrf batched function
+for (fname, elty) in
+    ((:cusolverDnSpotrfBatched,:Float32),
+     (:cusolverDnDpotrfBatched,:Float64),
+     (:cusolverDnCpotrfBatched,:Complex64),
+     (:cusolverDnZpotrfBatched,:Complex128))
+     @eval begin
+         # cusolverStatus_t cusolverDnSpotrfBatched(
+         #    cusolverDnHandle_t handle,
+         #    cublasFillMode_t uplo,
+         #    int n,
+         #    float *Aarray[],
+         #    int lda,
+         #    int *infoArray,
+         #    int batchSize);
+         function potrf_batched!(uplo::BlasChar,
+                                 Aarray::Array{CuMatrix{$elty},1})
+            println("***** in potrf batched function! *****")
+            for As in Aarray
+                m,n = size(As)
+                if m != n
+                    throw(DimensionMismatch("All matrices must be square!"))
+                end
+            end
+            m,n = size(Aarray[1])
+            lda = max(1, stride(Aarray[1],2))
+            Aptrs = device_batch(Aarray)
+            info = CuArray{Cint}(length(Aarray))
+            @check ccall(($(string(fname)), libcusolver),
+                          cusolverStatus_t,
+                          (cusolverDnHandle_t, cublasFillMode_t, Cint, Array{Ptr{$elty}}, Cint, Ptr{Cint}, Cint),
+                          libcusolver_handle_dense[], uplo, n, Aptrs, lda, info, length(A))
+            Aarray, info
+        end
+    end
+end
+
+
+#getrf
 for (bname, fname,elty) in ((:cusolverDnSgetrf_bufferSize, :cusolverDnSgetrf, :Float32),
                             (:cusolverDnDgetrf_bufferSize, :cusolverDnDgetrf, :Float64),
                             (:cusolverDnCgetrf_bufferSize, :cusolverDnCgetrf, :Complex64),
@@ -71,7 +116,7 @@ for (bname, fname,elty) in ((:cusolverDnSgetrf_bufferSize, :cusolverDnSgetrf, :F
     end
 end
 
-#geqrf 
+#geqrf
 for (bname, fname,elty) in ((:cusolverDnSgeqrf_bufferSize, :cusolverDnSgeqrf, :Float32),
                             (:cusolverDnDgeqrf_bufferSize, :cusolverDnDgeqrf, :Float64),
                             (:cusolverDnCgeqrf_bufferSize, :cusolverDnCgeqrf, :Complex64),
@@ -102,7 +147,7 @@ for (bname, fname,elty) in ((:cusolverDnSgeqrf_bufferSize, :cusolverDnSgeqrf, :F
     end
 end
 
-#sytrf 
+#sytrf
 for (bname, fname,elty) in ((:cusolverDnSsytrf_bufferSize, :cusolverDnSsytrf, :Float32),
                             (:cusolverDnDsytrf_bufferSize, :cusolverDnDsytrf, :Float64),
                             (:cusolverDnCsytrf_bufferSize, :cusolverDnCsytrf, :Complex64),
@@ -214,7 +259,7 @@ for (fname,elty) in ((:cusolverDnSgetrs, :Float32),
     end
 end
 
-#ormqr 
+#ormqr
 for (bname, fname, elty) in ((:cusolverDnSormqr_bufferSize, :cusolverDnSormqr, :Float32),
                              (:cusolverDnDormqr_bufferSize, :cusolverDnDormqr, :Float64),
                              (:cusolverDnCunmqr_bufferSize, :cusolverDnCunmqr, :Complex64),
@@ -246,7 +291,7 @@ for (bname, fname, elty) in ((:cusolverDnSormqr_bufferSize, :cusolverDnSormqr, :
             bufSize = Ref{Cint}(0)
             @check ccall(($(string(bname)),libcusolver), cusolverStatus_t,
                           (cusolverDnHandle_t, cublasSideMode_t,
-                           cublasOperation_t, Cint, Cint, Cint, Ptr{$elty}, 
+                           cublasOperation_t, Cint, Cint, Cint, Ptr{$elty},
                            Cint, Ptr{$elty}, Ptr{$elty}, Cint, Ref{Cint}),
                           libcusolver_handle_dense[], cuside,
                           cutrans, m, n, k, A,
@@ -270,7 +315,7 @@ for (bname, fname, elty) in ((:cusolverDnSormqr_bufferSize, :cusolverDnSormqr, :
     end
 end
 
-#orgqr 
+#orgqr
 for (bname, fname, elty) in ((:cusolverDnSorgqr_bufferSize, :cusolverDnSorgqr, :Float32),
                              (:cusolverDnDorgqr_bufferSize, :cusolverDnDorgqr, :Float64),
                              (:cusolverDnCungqr_bufferSize, :cusolverDnCungqr, :Complex64),
