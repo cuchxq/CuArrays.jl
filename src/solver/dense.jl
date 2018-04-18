@@ -61,7 +61,7 @@ for (fname, elty) in
          #    int batchSize);
          function potrf_batched!(uplo::BlasChar,
                                  Aarray::Array{CuMatrix{$elty},1})
-            println("***** in potrf batched function! *****")
+            cuuplo = cublasfill(uplo)
             for As in Aarray
                 m,n = size(As)
                 if m != n
@@ -72,10 +72,15 @@ for (fname, elty) in
             lda = max(1, stride(Aarray[1],2))
             Aptrs = device_batch(Aarray)
             info = CuArray{Cint}(length(Aarray))
+            println("------length of Aarray: ", length(Aarray),
+                    ", cuuplo ", cuuplo,
+                    ", n ", n,
+                    ", lda ", lda)
+
             @check ccall(($(string(fname)), libcusolver),
                           cusolverStatus_t,
-                          (cusolverDnHandle_t, cublasFillMode_t, Cint, Array{Ptr{$elty}}, Cint, Ptr{Cint}, Cint),
-                          libcusolver_handle_dense[], uplo, n, Aptrs, lda, info, length(Aarray))
+                          (cusolverDnHandle_t, cublasFillMode_t, Cint, Ptr{Ptr{$elty}}, Cint, Ptr{Cint}, Cint),
+                          libcusolver_handle_dense[], cuuplo, n, Aptrs, lda, info, length(Aarray))
             Aarray, info
         end
     end
@@ -420,7 +425,6 @@ for (bname, fname, elty, relty) in ((:cusolverDnSgesvd_bufferSize, :cusolverDnSg
             if info < 0
                 throw(ArgumentError("The $(info)th parameter is wrong"))
             end
-            U, S, Vt
         end
     end
 end
