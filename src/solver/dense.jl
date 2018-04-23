@@ -71,7 +71,8 @@ for (fname, elty) in
             m,n = size(Aarray[1])
             lda = max(1, stride(Aarray[1],2))
             Aptrs = device_batch(Aarray)
-            info = CuArray{Cint}(length(Aarray))
+            # info = CuArray{Cint}(length(Aarray))
+            info = zero(Cint)
             println("------length of Aarray: ", length(Aarray),
                     ", cuuplo ", cuuplo,
                     ", n ", n,
@@ -80,11 +81,69 @@ for (fname, elty) in
             @check ccall(($(string(fname)), libcusolver),
                           cusolverStatus_t,
                           (cusolverDnHandle_t, cublasFillMode_t, Cint, Ptr{Ptr{$elty}}, Cint, Ptr{Cint}, Cint),
-                          libcusolver_handle_dense[], cuuplo, n, Aptrs, lda, info, length(Aarray))
-            Aarray, info
+                          libcusolver_handle_dense[], cuuplo, n, Aptrs, lda, [info], length(Aarray))
+            if info < 0
+                throw(ArgumentError("The $(-info)th parameter is wrong"))
+            elseif info > 0
+                throw(Base.LinAlg.SingularException(info))
+            Aarray
         end
     end
 end
+
+#potrs batched function
+for (fname, elty) in
+    ((:cusolverDnSpotrsBatched,:Float32),
+     (:cusolverDnDpotrsBatched,:Float64),
+     (:cusolverDnCpotrsBatched,:Complex64),
+     (:cusolverDnZpotrsBatched,:Complex128))
+     @eval begin
+         # cusolverStatus_t cusolverDnSpotrsBatched(
+         #     cusolverDnHandle_t handle,
+         #     cublasFillMode_t uplo,
+         #     int n,
+         #     int nrhs,
+         #     float *Aarray[],
+         #     int lda,
+         #     float *Barray[],
+         #     int ldb,
+         #     int *info,
+         #     int batchSize);
+
+         function potrs_batched!(uplo::BlasChar,
+                                 Aarray::Array{CuMatrix{$elty},1},
+                                 Barray::Array{CuMatrix{$elty},1})
+            cuuplo = cublasfill(uplo)
+            n = size(Aarray[1],1)
+            for (As, Bs) in zip(Aarray, Barray)
+                if size(As, 2) != n
+                    throw(DimensionMismatch("Cholesky factorization is only possible for square matrices!"))
+                end
+                if size(Bs, 1) != n
+                    throw(DimensionMismatch("first dimension of B, $(size(Bs,1)), must match second dimension of A, $n"))
+                end
+            end
+            nrhs = size(Bs, 2)
+            lda = max(1, stride(Aarray[1],2))
+            ldb = max(1, stride(Barray[1],2))
+            Aptrs = device_batch(Aarray)
+            Bptrs = device_batch(Barray)
+            info = CuArray{Cint}(length(Aarray))
+
+            @check ccall(($(string(fname)), libcusolver),
+                          cusolverStatus_t,
+                          (cusolverDnHandle_t, cublasFillMode_t,
+                          Cint, Cint, Ptr{Ptr{$elty}}, Cint, Ptr{Ptr{$elty}}, Cint,
+                          Ptr{Cint}, Cint),
+                          libcusolver_handle_dense[], cuuplo, n, nrhs, Aptrs, lda, Bptrs, ldb, info, length(Aarray))
+            if info < 0
+                throw(ArgumentError("The $(info)th parameter is wrong"))
+            end
+            Barray
+        end
+    end
+end
+
 
 
 #getrf
