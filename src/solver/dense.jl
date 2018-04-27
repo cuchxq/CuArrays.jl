@@ -63,30 +63,23 @@ for (fname, elty) in
                                  Aarray::Array{CuMatrix{$elty},1})
             cuuplo = cublasfill(uplo)
             for As in Aarray
-                m,n = size(As)
-                if m != n
-                    throw(DimensionMismatch("All matrices must be square!"))
+                n = size(As, 1)
+                if size(As, 2) != n
+                    throw(DimensionMismatch("Cholesky factorization is only possible for square matrices!"))
                 end
             end
-            m,n = size(Aarray[1])
+            n = size(Aarray[1], 1)
+            # lda = max(1, stride(A,2))
             lda = max(1, stride(Aarray[1],2))
             Aptrs = device_batch(Aarray)
             # info = CuArray{Cint}(length(Aarray))
-            info = zero(Cint)
-            println("------length of Aarray: ", length(Aarray),
-                    ", cuuplo ", cuuplo,
-                    ", n ", n,
-                    ", lda ", lda)
+            infoArray = CuArray{Cint}(zeros(Cint, length(Aarray)))
 
             @check ccall(($(string(fname)), libcusolver),
                           cusolverStatus_t,
                           (cusolverDnHandle_t, cublasFillMode_t, Cint, Ptr{Ptr{$elty}}, Cint, Ptr{Cint}, Cint),
-                          libcusolver_handle_dense[], cuuplo, n, Aptrs, lda, [info], length(Aarray))
-            if info < 0
-                throw(ArgumentError("The $(-info)th parameter is wrong"))
-            elseif info > 0
-                throw(Base.LinAlg.SingularException(info))
-            Aarray
+                          libcusolver_handle_dense[], cuuplo, n, Aptrs, lda, infoArray, length(Aarray))
+            Aarray, infoArray
         end
     end
 end
@@ -123,23 +116,26 @@ for (fname, elty) in
                     throw(DimensionMismatch("first dimension of B, $(size(Bs,1)), must match second dimension of A, $n"))
                 end
             end
-            nrhs = size(Bs, 2)
+            nrhs = size(Barray[1], 2) # must be 1 #but different from
+            if(nrhs != 1)
+                throw(DimensionMismatch("B matrix must have only 1 column."))
+            end
             lda = max(1, stride(Aarray[1],2))
             ldb = max(1, stride(Barray[1],2))
             Aptrs = device_batch(Aarray)
             Bptrs = device_batch(Barray)
-            info = CuArray{Cint}(length(Aarray))
-
+            # info = zero(Cint)
+            infoArray = CuArray{Cint}(zeros(Cint, length(Aarray)))
             @check ccall(($(string(fname)), libcusolver),
                           cusolverStatus_t,
                           (cusolverDnHandle_t, cublasFillMode_t,
                           Cint, Cint, Ptr{Ptr{$elty}}, Cint, Ptr{Ptr{$elty}}, Cint,
                           Ptr{Cint}, Cint),
-                          libcusolver_handle_dense[], cuuplo, n, nrhs, Aptrs, lda, Bptrs, ldb, info, length(Aarray))
-            if info < 0
-                throw(ArgumentError("The $(info)th parameter is wrong"))
-            end
-            Barray
+                          libcusolver_handle_dense[], cuuplo, n, nrhs, Aptrs, lda, Bptrs, ldb, infoArray, length(Aarray))
+             # if info < 0
+             #     throw(ArgumentError("The $(info)th parameter is wrong"))
+             # end
+            Aarray, Barray, infoArray
         end
     end
 end

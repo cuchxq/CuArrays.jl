@@ -1456,7 +1456,7 @@ for (fname, elty) in
                          cutransa, cudiag, m, n, [alpha], Aptrs, lda,
                          Bptrs, ldb, length(A))
             B
-        end 
+        end
         function trsm_batched(side::BlasChar,
                               uplo::BlasChar,
                               transa::BlasChar,
@@ -1726,17 +1726,17 @@ for (fname, elty) in
             Aptrs = device_batch(A)
             Cptrs = device_batch(C)
             info  = zero(Cint)
-            infoarray = CuArray(zeros(Cint, length(A)))
+            infoArray = CuArray(zeros(Cint, length(A)))
             @check ccall(($(string(fname)),libcublas), cublasStatus_t,
                          (cublasHandle_t, cublasOperation_t, Cint, Cint,
                           Cint, Ptr{Ptr{$elty}}, Cint, Ptr{Ptr{$elty}},
                           Cint, Ptr{Cint}, Ptr{Cint}, Cint),
                          libcublas_handle[], cutrans, m, n, nrhs, Aptrs, lda,
-                         Cptrs, ldc, [info], infoarray, length(A))
+                         Cptrs, ldc, [info], infoArray, length(A))
             if( info != 0 )
                 throw(ArgumentError,string("Invalid value at ",-info))
             end
-            A, C, infoarray
+            A, C, infoArray
         end
         function gels_batched(trans::BlasChar,
                              A::Array{CuMatrix{$elty},1},
